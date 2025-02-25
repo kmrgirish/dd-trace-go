@@ -223,9 +223,7 @@ func TestSpanFinishWithErrorStackFrames(t *testing.T) {
 	assert.Equal(int32(1), span.Error)
 	assert.Equal("test error", span.Meta[ext.ErrorMsg])
 	assert.Equal("*errors.errorString", span.Meta[ext.ErrorType])
-	assert.Contains(span.Meta[ext.ErrorStack], "tracer.TestSpanFinishWithErrorStackFrames")
-	assert.Contains(span.Meta[ext.ErrorStack], "tracer.(*span).Finish")
-	assert.Equal(strings.Count(span.Meta[ext.ErrorStack], "\n\t"), 2)
+	assert.Equal(strings.Count(span.Meta[ext.ErrorStack], "\n\t"), 1)
 }
 
 // nilStringer is used to test nil detection when setting tags.

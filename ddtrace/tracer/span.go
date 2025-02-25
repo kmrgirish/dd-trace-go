@@ -364,8 +364,21 @@ func (s *span) setTagError(value interface{}, cfg errorConfig) {
 	}
 }
 
-// defaultStackLength specifies the default maximum size of a stack trace.
-const defaultStackLength = 32
+const (
+	// defaultStackLength specifies the default maximum size of a stack trace.
+	defaultStackLength = 32
+	// defaultStackSkip specifies the default number of stack frames to skip.
+	defaultStackSkip = 3
+)
+
+// internalPackagesPrefixes is the list of prefixes for internal packages
+// that should be better hidden in the stack trace.
+var internalSymbolPrefixes = []string{
+	"gopkg.in/DataDog/dd-trace-go.v1",
+	"github.com/DataDog/dd-trace-go",
+}
+
+// TODO(kakkoyun): Use/Make internal/stacktrace/frameIterator public and generic.
 
 // takeStacktrace takes a stack trace of maximum n entries, skipping the first skip entries.
 // If n is 0, up to 20 entries are retrieved.
@@ -376,8 +389,8 @@ func takeStacktrace(n, skip uint) string {
 	var builder strings.Builder
 	pcs := make([]uintptr, n)
 
-	// +2 to exclude runtime.Callers and takeStacktrace
-	numFrames := runtime.Callers(2+int(skip), pcs)
+	// +3 to exclude runtime.Callers, takeStacktrace, and setTagError.
+	numFrames := runtime.Callers(defaultStackSkip+int(skip), pcs)
 	if numFrames == 0 {
 		return ""
 	}
@@ -386,6 +399,9 @@ func takeStacktrace(n, skip uint) string {
 		frame, more := frames.Next()
 		if i != 0 {
 			builder.WriteByte('\n')
+		}
+		if skipFrame(frame) {
+			continue
 		}
 		builder.WriteString(frame.Function)
 		builder.WriteByte('\n')
@@ -398,6 +414,20 @@ func takeStacktrace(n, skip uint) string {
 		}
 	}
 	return builder.String()
+}
+
+func skipFrame(frame runtime.Frame) bool {
+	if frame.File == "<generated>" { // skip orchestrion generated code.
+		return true
+	}
+
+	for _, prefix := range internalSymbolPrefixes {
+		if strings.HasPrefix(frame.Function, prefix) {
+			return true
+		}
+	}
+
+	return false
 }
 
 // setMeta sets a string tag. This method is not safe for concurrent use.
